@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NumberSenseFromYoung - Math Learning App</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Lucide React icons as inline SVG components
+        const Trophy = ({ className }) => (
+            <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                <path d="M4 22h16"></path>
+                <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+            </svg>
+        );
+
+        const ArrowLeft = ({ className }) => (
+            <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m12 19-7-7 7-7"></path>
+                <path d="M19 12H5"></path>
+            </svg>
+        );
+
+        const MathLearningApp = () => {
+            const [category, setCategory] = useState(null);
+            const [problem, setProblem] = useState(null);
+            const [score, setScore] = useState(0);
+            const [feedback, setFeedback] = useState('');
+            const [showCelebration, setShowCelebration] = useState(false);
+            const [timeLimit, setTimeLimit] = useState(null);
+            const [timeRemaining, setTimeRemaining] = useState(0);
+            const [showSettings, setShowSettings] = useState(false);
+            const [showCountdown, setShowCountdown] = useState(false);
+            const [countdownValue, setCountdownValue] = useState(3);
+            const [questionNumber, setQuestionNumber] = useState(0);
+            const [usedProblems, setUsedProblems] = useState([]);
+            const [answerLocked, setAnswerLocked] = useState(false);
+            const [questionHistory, setQuestionHistory] = useState([]);
+            const [showWrongAnswer, setShowWrongAnswer] = useState(false);
+            const [spellingAnswer, setSpellingAnswer] = useState('');
+            const [timesTableChoice, setTimesTableChoice] = useState(null);
+            const [showTimesTableMenu, setShowTimesTableMenu] = useState(false);
+            const [customWords, setCustomWords] = useState([]);
+            const [currentInput, setCurrentInput] = useState('');
+            const [showCustomWordEntry, setShowCustomWordEntry] = useState(false);
+            const [multiplicationAnswer, setMultiplicationAnswer] = useState('');
+
+            useEffect(() => {
+                if (showCountdown && countdownValue > 0) {
+                    const timer = setTimeout(() => {
+                        setCountdownValue(countdownValue - 1);
+                    }, 1000);
+                    return () => clearTimeout(timer);
+                } else if (showCountdown && countdownValue === 0) {
+                    setShowCountdown(false);
+                    setScore(0);
+                    setQuestionNumber(0);
+                    setUsedProblems([]);
+                    setQuestionHistory([]);
+                    generateProblem(category);
+                }
+            }, [showCountdown, countdownValue]);
+
+            useEffect(() => {
+                if (timeRemaining > 0 && problem && questionNumber <= 10) {
+                    const timer = setTimeout(() => {
+                        setTimeRemaining(timeRemaining - 1);
+                    }, 1000);
+                    return () => clearTimeout(timer);
+                } else if (timeRemaining === 0 && problem && timeLimit && questionNumber <= 10) {
+                    moveToNextQuestion();
+                }
+            }, [timeRemaining, problem, questionNumber]);
+
+            useEffect(() => {
+                if (timesTableChoice && (category === 'multiplication-facts' || category === 'multiplication-challenge') && questionNumber === 0 && !problem) {
+                    generateProblem(category);
+                }
+            }, [timesTableChoice, category]);
+
+            const categories = [
+                { id: 'counting-objects-1-10', name: 'Count 1-10', emoji: '🔢', timed: false },
+                { id: 'counting-objects-11-20', name: 'Count 11-20', emoji: '🎯', timed: false },
+                { id: 'addition-1-10', name: 'Addition 1-10', emoji: '➕', timed: true },
+                { id: 'addition-11-20', name: 'Addition 11-20', emoji: '➕', timed: true },
+                { id: 'subtraction-1-10', name: 'Subtraction 1-10', emoji: '➖', timed: true },
+                { id: 'subtraction-11-20', name: 'Subtraction 11-20', emoji: '➖', timed: true },
+                { id: 'multiplication-facts', name: 'Multiplication Facts', emoji: '✖️', timed: false },
+                { id: 'multiplication-challenge', name: 'Multiplication 1-10 Challenge', emoji: '✖️', timed: false },
+                { id: 'multiplication-timed', name: 'Multiplication 1-10 Timed', emoji: '🚀', timed: true },
+                { id: 'spelling-numbers', name: 'Spell Numbers 1-10', emoji: '📝', timed: false },
+                { id: 'spelling-custom', name: 'Spell Custom Words', emoji: '✏️', timed: false }
+            ];
+
+            const emojiObjects = [
+                { emoji: '🍎', name: 'apple', plural: 'apples' },
+                { emoji: '🍌', name: 'banana', plural: 'bananas' },
+                { emoji: '🍓', name: 'strawberry', plural: 'strawberries' },
+                { emoji: '⭐', name: 'star', plural: 'stars' },
+                { emoji: '🎈', name: 'balloon', plural: 'balloons' },
+                { emoji: '🐶', name: 'dog', plural: 'dogs' },
+                { emoji: '🐱', name: 'cat', plural: 'cats' },
+                { emoji: '🚗', name: 'car', plural: 'cars' },
+                { emoji: '🌸', name: 'flower', plural: 'flowers' },
+                { emoji: '🦋', name: 'butterfly', plural: 'butterflies' }
+            ];
+
+            const numberWords = [
+                { word: 'one', number: 1 },
+                { word: 'two', number: 2 },
+                { word: 'three', number: 3 },
+                { word: 'four', number: 4 },
+                { word: 'five', number: 5 },
+                { word: 'six', number: 6 },
+                { word: 'seven', number: 7 },
+                { word: 'eight', number: 8 },
+                { word: 'nine', number: 9 },
+                { word: 'ten', number: 10 }
+            ];
+
+            const keyboard = [
+                ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+                ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+                ['Z', 'X', 'C', 'V', 'B', 'N', 'M']
+            ];
+
+            const speakWord = (word) => {
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(word);
+                    utterance.rate = 0.8;
+                    window.speechSynthesis.speak(utterance);
+                }
+            };
+
+            const deleteCustomWord = (index) => {
+                setCustomWords(customWords.filter((_, i) => i !== index));
+            };
+
+            const handleAddCustomWord = () => {
+                if (currentInput.trim() && customWords.length < 10) {
+                    setCustomWords([...customWords, currentInput.toLowerCase()]);
+                    setCurrentInput('');
+                }
+            };
+
+            const generateProblem = (catId) => {
+                if (questionNumber >= 10) {
+                    setQuestionNumber(11);
+                    return;
+                }
+                
+                if ((catId === 'multiplication-facts' || catId === 'multiplication-challenge') && !timesTableChoice) {
+                    return;
+                }
+
+                let newProblem = {};
+                let problemKey = '';
+                let attempts = 0;
+                const maxAttempts = 50;
+                
+                do {
+                    attempts++;
+                    switch(catId) {
+                        case 'counting-objects-1-10':
+                            const count1 = Math.floor(Math.random() * 10) + 1;
+                            const obj1 = emojiObjects[Math.floor(Math.random() * emojiObjects.length)];
+                            problemKey = `count-${count1}-${obj1.emoji}`;
+                            newProblem = {
+                                type: 'counting',
+                                question: `Count the number of ${obj1.plural}.`,
+                                emoji: obj1.emoji,
+                                count: count1,
+                                answer: count1,
+                                options: generateOptions(count1, 1, 10)
+                            };
+                            break;
+                            
+                        case 'counting-objects-11-20':
+                            const count2 = Math.floor(Math.random() * 10) + 11;
+                            const obj2 = emojiObjects[Math.floor(Math.random() * emojiObjects.length)];
+                            problemKey = `count-${count2}-${obj2.emoji}`;
+                            newProblem = {
+                                type: 'counting',
+                                question: `Count the number of ${obj2.plural}.`,
+                                emoji: obj2.emoji,
+                                count: count2,
+                                answer: count2,
+                                options: generateOptions(count2, 11, 20)
+                            };
+                            break;
+                            
+                        case 'addition-1-10':
+                            const a1 = Math.floor(Math.random() * 10) + 1;
+                            const b1 = Math.floor(Math.random() * 10) + 1;
+                            const sum1 = a1 + b1;
+                            const addObj = emojiObjects[Math.floor(Math.random() * emojiObjects.length)];
+                            problemKey = `add-${a1}-${b1}`;
+                            newProblem = {
+                                type: 'addition',
+                                question: `${a1} + ${b1} =`,
+                                visual: { a: a1, b: b1, emoji: addObj.emoji },
+                                answer: sum1
+                            };
+                            break;
+                            
+                        case 'addition-11-20':
+                            const a2 = Math.floor(Math.random() * 10) + 11;
+                            const b2 = Math.floor(Math.random() * 10) + 11;
+                            const sum2 = a2 + b2;
+                            problemKey = `add-${a2}-${b2}`;
+                            newProblem = {
+                                type: 'addition',
+                                question: `${a2} + ${b2} =`,
+                                answer: sum2
+                            };
+                            break;
+                            
+                        case 'subtraction-1-10':
+                            const s1 = Math.floor(Math.random() * 10) + 1;
+                            const s2 = Math.floor(Math.random() * s1) + 1;
+                            const diff = s1 - s2;
+                            const subObj = emojiObjects[Math.floor(Math.random() * emojiObjects.length)];
+                            problemKey = `sub-${s1}-${s2}`;
+                            newProblem = {
+                                type: 'subtraction',
+                                question: `${s1} − ${s2} =`,
+                                visual: { a: s1, b: s2, emoji: subObj.emoji },
+                                answer: diff
+                            };
+                            break;
+                            
+                        case 'subtraction-11-20':
+                            const s3 = Math.floor(Math.random() * 10) + 11;
+                            const s4 = Math.floor(Math.random() * (s3 - 10)) + 1;
+                            const diff2 = s3 - s4;
+                            problemKey = `sub-${s3}-${s4}`;
+                            newProblem = {
+                                type: 'subtraction',
+                                question: `${s3} − ${s4} =`,
+                                answer: diff2
+                            };
+                            break;
+                            
+                        case 'multiplication-facts':
+                            if (!timesTableChoice) return;
+                            const factNum = questionNumber + 1;
+                            const product = timesTableChoice * factNum;
+                            const mulObj = emojiObjects[Math.floor(Math.random() * emojiObjects.length)];
+                            problemKey = `mul-${timesTableChoice}-${factNum}`;
+                            newProblem = {
+                                type: 'multiplication-facts',
+                                question: `${timesTableChoice} × ${factNum} =`,
+                                visual: { groups: timesTableChoice, itemsPerGroup: factNum, emoji: mulObj.emoji },
+                                answer: product
+                            };
+                            break;
+                            
+                        case 'multiplication-challenge':
+                            if (!timesTableChoice) return;
+                            const randomMultiplier = Math.floor(Math.random() * 10) + 1;
+                            const challengeProduct = timesTableChoice * randomMultiplier;
+                            problemKey = `mul-${timesTableChoice}-${randomMultiplier}`;
+                            newProblem = {
+                                type: 'multiplication-challenge',
+                                question: `${timesTableChoice} × ${randomMultiplier} =`,
+                                answer: challengeProduct
+                            };
+                            break;
+                            
+                        case 'multiplication-timed':
+                            const m5 = Math.floor(Math.random() * 10) + 1;
+                            const m6 = Math.floor(Math.random() * 10) + 1;
+                            const product3 = m5 * m6;
+                            problemKey = `mul-${m5}-${m6}`;
+                            newProblem = {
+                                type: 'multiplication-timed',
+                                question: `${m5} × ${m6} =`,
+                                answer: product3
+                            };
+                            break;
+                            
+                        case 'spelling-numbers':
+                            const randomWord = numberWords[Math.floor(Math.random() * numberWords.length)];
+                            problemKey = `spell-${randomWord.number}`;
+                            newProblem = {
+                                type: 'spelling',
+                                question: 'Spell this number:',
+                                number: randomWord.number,
+                                word: randomWord.word,
+                                answer: randomWord.word
+                            };
+                            break;
+                            
+                        case 'spelling-custom':
+                            if (customWords.length === 0) return;
+                            const randomCustomWord = customWords[Math.floor(Math.random() * customWords.length)];
+                            problemKey = `spell-custom-${randomCustomWord}`;
+                            newProblem = {
+                                type: 'spelling',
+                                question: 'Spell this word:',
+                                word: randomCustomWord,
+                                answer: randomCustomWord
+                            };
+                            break;
+                    }
+                } while (usedProblems.includes(problemKey) && attempts < maxAttempts);
+                
+                setUsedProblems([...usedProblems, problemKey]);
+                setProblem(newProblem);
+                setFeedback('');
+                setAnswerLocked(false);
+                setSpellingAnswer('');
+                setMultiplicationAnswer('');
+                setQuestionNumber(questionNumber + 1);
+                if (timeLimit) {
+                    setTimeRemaining(timeLimit);
+                }
+            };
+
+            const generateOptions = (correct, min, max) => {
+                const options = [correct];
+                while (options.length < 4) {
+                    const rand = Math.floor(Math.random() * (max - min + 1)) + min;
+                    if (!options.includes(rand)) {
+                        options.push(rand);
+                    }
+                }
+                return options.sort(() => Math.random() - 0.5);
+            };
+
+            const moveToNextQuestion = () => {
+                if (questionNumber >= 10) {
+                    setQuestionNumber(11);
+                    return;
+                }
+                
+                if (timeLimit && timeRemaining === 0 && problem) {
+                    setQuestionHistory([...questionHistory, {
+                        question: problem.question,
+                        answer: problem.answer,
+                        userAnswer: null,
+                        correct: false
+                    }]);
+                }
+                
+                setFeedback('');
+                setAnswerLocked(false);
+                generateProblem(category);
+            };
+
+            const handleAnswer = (selected) => {
+                if (answerLocked) return;
+                
+                let isCorrect = false;
+                
+                if (problem.type === 'spelling') {
+                    isCorrect = spellingAnswer.toLowerCase() === problem.answer.toLowerCase();
+                } else if (problem.type === 'counting') {
+                    isCorrect = selected === problem.answer;
+                } else {
+                    isCorrect = parseInt(multiplicationAnswer) === problem.answer;
+                }
+                
+                if (isCorrect) {
+                    setScore(score + 1);
+                    setFeedback('Correct!');
+                    setShowCelebration(true);
+                    setAnswerLocked(true);
+                    
+                    setQuestionHistory([...questionHistory, {
+                        question: problem.question,
+                        answer: problem.answer,
+                        userAnswer: selected || multiplicationAnswer || spellingAnswer,
+                        correct: true
+                    }]);
+                    
+                    if (timeLimit) {
+                        setTimeout(() => {
+                            setShowCelebration(false);
+                            setFeedback('');
+                            setAnswerLocked(false);
+                            moveToNextQuestion();
+                        }, 1200);
+                    }
+                } else {
+                    if (!timeLimit) {
+                        setFeedback(`The correct answer is ${problem.answer}.`);
+                        setAnswerLocked(true);
+                        
+                        setQuestionHistory([...questionHistory, {
+                            question: problem.question,
+                            answer: problem.answer,
+                            userAnswer: selected || multiplicationAnswer || spellingAnswer,
+                            correct: false
+                        }]);
+                    } else {
+                        setFeedback('');
+                        setAnswerLocked(true);
+                        setShowWrongAnswer(true);
+                        
+                        setQuestionHistory([...questionHistory, {
+                            question: problem.question,
+                            answer: problem.answer,
+                            userAnswer: selected || multiplicationAnswer || spellingAnswer,
+                            correct: false
+                        }]);
+                        
+                        setTimeout(() => {
+                            setShowWrongAnswer(false);
+                            setAnswerLocked(false);
+                            moveToNextQuestion();
+                        }, 1200);
+                    }
+                }
+            };
+
+            const handleNextQuestion = () => {
+                setFeedback('');
+                setShowCelebration(false);
+                setAnswerLocked(false);
+                setSpellingAnswer('');
+                setMultiplicationAnswer('');
+                moveToNextQuestion();
+            };
+
+            const selectCategory = (catId) => {
+                const selectedCat = categories.find(c => c.id === catId);
+                
+                if (catId === 'multiplication-facts' || catId === 'multiplication-challenge') {
+                    setShowTimesTableMenu(true);
+                    setCategory(catId);
+                    return;
+                }
+                
+                if (catId === 'spelling-custom') {
+                    setShowCustomWordEntry(true);
+                    setCategory(catId);
+                    return;
+                }
+                
+                if (selectedCat.timed) {
+                    setShowSettings(true);
+                    setCategory(catId);
+                } else {
+                    setCategory(catId);
+                    setScore(0);
+                    setQuestionNumber(0);
+                    setUsedProblems([]);
+                    setTimeLimit(null);
+                    setQuestionHistory([]);
+                    generateProblem(catId);
+                }
+            };
+
+            const startWithTimer = (seconds) => {
+                setTimeLimit(seconds);
+                setShowSettings(false);
+                setShowCountdown(true);
+                setCountdownValue(3);
+            };
+
+            // Results screen
+            if (questionNumber > 10) {
+                const isTimed = timeLimit !== null;
+                
+                return (
+                    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 sm:p-6">
+                        <div className="bg-white rounded-3xl shadow-sm p-8 sm:p-12 text-center max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="text-6xl sm:text-7xl mb-4 sm:mb-6">
+                                {score >= 8 ? '🌟' : score >= 5 ? '👏' : '💪'}
+                            </div>
+                            <h2 className="text-2xl sm:text-3xl font-semibold mb-2 sm:mb-3 text-gray-900">
+                                {score >= 8 ? 'Excellent!' : score >= 5 ? 'Good job!' : 'Keep practising!'}
+                            </h2>
+                            <p className="text-lg sm:text-xl text-gray-600 mb-6 sm:mb-8">
+                                Score: <span className="font-semibold text-gray-900">{score}/10</span>
+                            </p>
+                            
+                            {isTimed && questionHistory.length > 0 && (
+                                <div className="mb-6 sm:mb-8 text-left max-h-[40vh] overflow-y-auto">
+                                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 sticky top-0 bg-white">Summary</h3>
+                                    <div className="space-y-2">
+                                        {questionHistory.map((item, index) => (
+                                            <div key={index} className="flex items-center justify-between bg-gray-50 p-2.5 sm:p-3 rounded-lg text-sm sm:text-base">
+                                                <div className="flex items-center gap-2 sm:gap-3">
+                                                    <span className={`text-lg sm:text-xl flex-shrink-0 ${item.correct ? 'text-green-600' : 'text-red-600'}`}>
+                                                        {item.correct ? '✓' : '✗'}
+                                                    </span>
+                                                    <span className="text-gray-900 font-medium">{item.question} {item.answer}</span>
+                                                </div>
+                                                {!item.correct && item.userAnswer !== null && (
+                                                    <span className="text-xs sm:text-sm text-gray-500 ml-2 flex-shrink-0">Your: {item.userAnswer}</span>
+                                                )}
+                                                {!item.correct && item.userAnswer === null && (
+                                                    <span className="text-xs sm:text-sm text-gray-500 ml-2 flex-shrink-0">Time's up</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            <button
+                                onClick={() => { 
+                                    setCategory(null); 
+                                    setTimeLimit(null); 
+                                    setQuestionNumber(0); 
+                                    setScore(0); 
+                                    setUsedProblems([]);
+                                    setProblem(null);
+                                    setQuestionHistory([]);
+                                    setTimesTableChoice(null);
+                                }}
+                                className="w-full bg-gray-900 text-white font-medium py-3 px-6 rounded-xl hover:bg-gray-800 transition-colors"
+                            >
+                                Back to categories
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Times table menu
+            if (showTimesTableMenu) {
+                return (
+                    <div className="min-h-screen bg-gray-50 p-6">
+                        <div className="max-w-md mx-auto mt-12">
+                            <div className="bg-white rounded-3xl shadow-sm p-8">
+                                <h2 className="text-2xl font-semibold mb-2 text-gray-900">Choose Times Table</h2>
+                                <p className="text-gray-600 mb-8">Which times table would you like to practice?</p>
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                                        <button
+                                            key={num}
+                                            onClick={() => {
+                                                setTimesTableChoice(num);
+                                                setShowTimesTableMenu(false);
+                                                setScore(0);
+                                                setQuestionNumber(0);
+                                                setUsedProblems([]);
+                                                setQuestionHistory([]);
+                                            }}
+                                            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl text-2xl transition-colors"
+                                        >
+                                            {num}× Table
+                                        </button>
+                                    ))}
+                                </div>
+                                
+                                <button
+                                    onClick={() => { setShowTimesTableMenu(false); setCategory(null); setTimesTableChoice(null); }}
+                                    className="w-full mt-6 text-gray-600 hover:text-gray-900 font-medium"
+                                >
+                                    ← Back
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Custom word entry screen
+            if (showCustomWordEntry) {
+                return (
+                    <div className="min-h-screen bg-gray-50 p-4">
+                        <div className="max-w-2xl mx-auto">
+                            <div className="flex justify-between items-center mb-6">
+                                <button
+                                    onClick={() => {
+                                        setShowCustomWordEntry(false);
+                                        setCategory(null);
+                                        setCustomWords([]);
+                                        setCurrentInput('');
+                                    }}
+                                    className="p-2 hover:bg-gray-200 rounded-lg"
+                                >
+                                    <ArrowLeft className="w-6 h-6" />
+                                </button>
+                                <h2 className="text-2xl font-bold text-gray-900">Enter Words ({customWords.length}/10)</h2>
+                                <div className="w-10"></div>
+                            </div>
+
+                            <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
+                                <h3 className="text-lg font-semibold mb-4">Your Words:</h3>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {customWords.map((word, i) => (
+                                        <div key={i} className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+                                            <button onClick={() => speakWord(word)} className="hover:scale-110">
+                                                🔊
+                                            </button>
+                                            <span>{word}</span>
+                                            <button onClick={() => deleteCustomWord(i)} className="text-red-600 hover:text-red-800 font-bold ml-1">
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {customWords.length === 0 && (
+                                        <span className="text-gray-400 italic">No words yet...</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
+                                <div className="text-center mb-4">
+                                    <div className="text-3xl font-bold text-gray-900 min-h-[50px] border-b-4 border-blue-500 pb-2">
+                                        {currentInput || '_'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-2xl p-6 shadow-sm">
+                                {keyboard.map((row, i) => (
+                                    <div key={i} className="flex justify-center gap-1 sm:gap-2 mb-2">
+                                        {row.map((letter) => (
+                                            <button
+                                                key={letter}
+                                                onClick={() => setCurrentInput(currentInput + letter.toLowerCase())}
+                                                className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-4 sm:py-4 sm:px-6 rounded-lg text-lg sm:text-xl transition-colors"
+                                            >
+                                                {letter}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ))}
+                                
+                                <div className="flex justify-center gap-2 mt-4">
+                                    <button
+                                        onClick={() => setCurrentInput(currentInput.slice(0, -1))}
+                                        className="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-colors"
+                                    >
+                                        Delete
+                                    </button>
+                                    
+                                    <button
+                                        onClick={handleAddCustomWord}
+                                        disabled={!currentInput.trim() || customWords.length >= 10}
+                                        className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-8 rounded-lg transition-colors"
+                                    >
+                                        Add Word
+                                    </button>
+                                </div>
+                            </div>
+
+                            {customWords.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        setShowCustomWordEntry(false);
+                                        setScore(0);
+                                        setQuestionNumber(0);
+                                        setUsedProblems([]);
+                                        setQuestionHistory([]);
+                                        generateProblem(category);
+                                    }}
+                                    className="w-full mt-6 bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-xl text-xl transition-colors"
+                                >
+                                    Start Quiz ({customWords.length} words)
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Countdown screen
+            if (showCountdown) {
+                const countdownText = countdownValue === 3 ? 'Ready' : countdownValue === 2 ? 'Set' : 'Go!';
+                
+                return (
+                    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                        <div className="text-7xl font-bold text-gray-900 animate-pulse">
+                            {countdownText}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Settings screen (timer selection)
+            if (showSettings) {
+                return (
+                    <div className="min-h-screen bg-gray-50 p-6">
+                        <div className="max-w-md mx-auto mt-12">
+                            <div className="bg-white rounded-3xl shadow-sm p-8">
+                                <h2 className="text-2xl font-semibold mb-2 text-gray-900">Choose Time Limit</h2>
+                                <p className="text-gray-600 mb-8">Seconds per question</p>
+                                
+                                <div className="space-y-3">
+                                    <button
+                                        onClick={() => startWithTimer(5)}
+                                        className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-4 rounded-xl transition-colors"
+                                    >
+                                        ⚡ 5 seconds
+                                    </button>
+                                    <button
+                                        onClick={() => startWithTimer(15)}
+                                        className="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-4 rounded-xl transition-colors"
+                                    >
+                                        🏃 15 seconds
+                                    </button>
+                                    <button
+                                        onClick={() => startWithTimer(30)}
+                                        className="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-4 rounded-xl transition-colors"
+                                    >
+                                        🚶 30 seconds
+                                    </button>
+                                </div>
+                                
+                                <button
+                                    onClick={() => { setShowSettings(false); setCategory(null); }}
+                                    className="w-full mt-6 text-gray-600 hover:text-gray-900 font-medium"
+                                >
+                                    ← Back
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Category selection screen
+            if (!category) {
+                return (
+                    <div className="min-h-screen bg-gray-50 p-4">
+                        <div className="max-w-4xl mx-auto mt-4 sm:mt-8">
+                            <div className="text-center mb-6 sm:mb-8">
+                                <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-2">
+                                    NumberSenseFromYoung
+                                </h1>
+                                <p className="text-sm sm:text-base text-gray-600">Choose a category to begin</p>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                                {categories.map((cat) => (
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => selectCategory(cat.id)}
+                                        className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md transition-all text-center min-h-[100px] sm:min-h-[120px] flex flex-col items-center justify-center"
+                                    >
+                                        <div className="text-3xl sm:text-4xl mb-1.5 sm:mb-2">{cat.emoji}</div>
+                                        <div className="text-xs sm:text-sm font-medium text-gray-900 leading-tight px-1">{cat.name}</div>
+                                        {cat.timed && <div className="text-xs text-gray-500 mt-1">⏱️ Timed</div>}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Question screen - continuing in next part due to length...
+            const NumberKeyboard = () => (
+                <div className="bg-white rounded-xl p-3">
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                            <button
+                                key={num}
+                                onClick={() => setMultiplicationAnswer(multiplicationAnswer + num.toString())}
+                                disabled={answerLocked}
+                                className={`bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-4 px-6 rounded-lg text-2xl transition-colors ${answerLocked ? 'opacity-50' : ''}`}
+                            >
+                                {num}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button
+                            onClick={() => setMultiplicationAnswer(multiplicationAnswer.slice(0, -1))}
+                            disabled={answerLocked}
+                            className={`bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors ${answerLocked ? 'opacity-50' : ''}`}
+                        >
+                            Delete
+                        </button>
+                        <button
+                            onClick={() => setMultiplicationAnswer(multiplicationAnswer + '0')}
+                            disabled={answerLocked}
+                            className={`bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-6 rounded-lg text-2xl transition-colors ${answerLocked ? 'opacity-50' : ''}`}
+                        >
+                            0
+                        </button>
+                    </div>
+                </div>
+            );
+
+            // Main question screen
+            return (
+                <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+                    <div className="max-w-2xl mx-auto">
+                        <div className="flex justify-between items-center mb-4 sm:mb-6">
+                            <button
+                                onClick={() => { 
+                                    setCategory(null); 
+                                    setTimeLimit(null); 
+                                    setQuestionNumber(0); 
+                                    setScore(0); 
+                                    setUsedProblems([]);
+                                    setProblem(null);
+                                    setFeedback('');
+                                    setShowCelebration(false);
+                                    setShowWrongAnswer(false);
+                                    setQuestionHistory([]);
+                                    setTimesTableChoice(null);
+                                }}
+                                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                            >
+                                <ArrowLeft className="w-5 h-5 text-gray-700" />
+                            </button>
+                            
+                            <div className="flex gap-2 sm:gap-3 items-center">
+                                <div className="bg-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg shadow-sm text-xs sm:text-sm font-medium text-gray-700">
+                                    {questionNumber}/10
+                                </div>
+                                {timeLimit && (
+                                    <div className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg shadow-sm text-xs sm:text-sm font-medium ${
+                                        timeRemaining <= 3 ? 'bg-red-500 text-white' : 'bg-white text-gray-700'
+                                    }`}>
+                                        ⏱️ {timeRemaining}s
+                                    </div>
+                                )}
+                                <div className="bg-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg shadow-sm flex items-center gap-1.5 sm:gap-2">
+                                    <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
+                                    <span className="text-xs sm:text-sm font-medium text-gray-900">{score}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-3xl shadow-sm p-4 sm:p-6 relative">
+                            {showCelebration && timeLimit && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-green-50 bg-opacity-95 rounded-3xl z-10">
+                                    <div className="text-6xl text-green-600">✓</div>
+                                </div>
+                            )}
+                            
+                            {showWrongAnswer && timeLimit && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-red-50 bg-opacity-95 rounded-3xl z-10">
+                                    <div className="text-6xl text-red-600">✗</div>
+                                </div>
+                            )}
+                            
+                            <h2 className="text-lg sm:text-xl font-semibold text-center mb-4 sm:mb-6 text-gray-900">{problem?.question}</h2>
+                            
+                            {/* Counting */}
+                            {problem?.type === 'counting' && (
+                                <div className="text-3xl sm:text-4xl mb-4 sm:mb-6 flex flex-wrap justify-center gap-1.5 max-h-48 sm:max-h-60 overflow-y-auto">
+                                    {Array(problem.count).fill(0).map((_, i) => (
+                                        <span key={i}>{problem.emoji}</span>
+                                    ))}
+                                </div>
+                            )}
+                            
+                            {/* Addition with visual */}
+                            {problem?.type === 'addition' && problem.visual && (
+                                <div className="mb-6 sm:mb-8">
+                                    <div className="flex justify-center items-center gap-3 sm:gap-6 mb-4 sm:mb-6 flex-wrap">
+                                        <div className="text-3xl sm:text-4xl flex flex-wrap justify-center gap-1 max-w-[120px] sm:max-w-xs">
+                                            {Array(problem.visual.a).fill(0).map((_, i) => (
+                                                <span key={i}>{problem.visual.emoji}</span>
+                                            ))}
+                                        </div>
+                                        <div className="text-3xl sm:text-4xl font-medium text-gray-400">+</div>
+                                        <div className="text-3xl sm:text-4xl flex flex-wrap justify-center gap-1 max-w-[120px] sm:max-w-xs">
+                                            {Array(problem.visual.b).fill(0).map((_, i) => (
+                                                <span key={i}>{problem.visual.emoji}</span>
+                                            ))}
+                                        </div>
+                                        <div className="text-3xl sm:text-4xl font-medium text-gray-400">=</div>
+                                        <div className="text-3xl sm:text-4xl font-medium text-gray-400">?</div>
+                                    </div>
+                                    
+                                    <div className="bg-gray-100 rounded-2xl p-4 mb-3">
+                                        <div className="text-center">
+                                            <label className="text-xs sm:text-sm text-gray-600 mb-1 block">Your Answer:</label>
+                                            <div className="text-3xl sm:text-4xl font-bold text-gray-900 min-h-[50px] border-b-4 border-blue-500 pb-2">
+                                                {multiplicationAnswer || '_'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <NumberKeyboard />
+                                </div>
+                            )}
+                            
+                            {/* Addition without visual */}
+                            {problem?.type === 'addition' && !problem.visual && (
+                                <div className="mb-6 sm:mb-8">
+                                    <div className="text-5xl sm:text-6xl font-semibold mb-6 sm:mb-8 text-gray-900 text-center">
+                                        {problem.question}
+                                    </div>
+                                    
+                                    <div className="bg-gray-100 rounded-2xl p-4 mb-3">
+                                        <div className="text-center">
+                                            <label className="text-xs sm:text-sm text-gray-600 mb-1 block">Your Answer:</label>
+                                            <div className="text-3xl sm:text-4xl font-bold text-gray-900 min-h-[50px] border-b-4 border-blue-500 pb-2">
+                                                {multiplicationAnswer || '_'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <NumberKeyboard />
+                                </div>
+                            )}
+                            
+                            {/* Subtraction with visual */}
+                            {problem?.type === 'subtraction' && problem.visual && (
+                                <div className="mb-6 sm:mb-8">
+                                    <div className="flex justify-center items-center gap-3 sm:gap-6 mb-4 sm:mb-6 flex-wrap">
+                                        <div className="text-3xl sm:text-4xl flex flex-wrap justify-center gap-1 max-w-[120px] sm:max-w-xs">
+                                            {Array(problem.visual.a).fill(0).map((_, i) => (
+                                                <span key={i}>{problem.visual.emoji}</span>
+                                            ))}
+                                        </div>
+                                        <div className="text-3xl sm:text-4xl font-medium text-gray-400">−</div>
+                                        <div className="text-3xl sm:text-4xl flex flex-wrap justify-center gap-1 max-w-[120px] sm:max-w-xs">
+                                            {Array(problem.visual.b).fill(0).map((_, i) => (
+                                                <span key={`cross-${i}`} className="relative">
+                                                    <span className="opacity-30">{problem.visual.emoji}</span>
+                                                    <span className="absolute inset-0 flex items-center justify-center text-red-500 text-2xl sm:text-3xl">✗</span>
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <div className="text-3xl sm:text-4xl font-medium text-gray-400">=</div>
+                                        <div className="text-3xl sm:text-4xl font-medium text-gray-400">?</div>
+                                    </div>
+                                    
+                                    <div className="bg-gray-100 rounded-2xl p-4 mb-3">
+                                        <div className="text-center">
+                                            <label className="text-xs sm:text-sm text-gray-600 mb-1 block">Your Answer:</label>
+                                            <div className="text-3xl sm:text-4xl font-bold text-gray-900 min-h-[50px] border-b-4 border-blue-500 pb-2">
+                                                {multiplicationAnswer || '_'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <NumberKeyboard />
+                                </div>
+                            )}
+                            
+                            {/* Subtraction without visual */}
+                            {problem?.type === 'subtraction' && !problem.visual && (
+                                <div className="mb-6 sm:mb-8">
+                                    <div className="text-5xl sm:text-6xl font-semibold mb-6 sm:mb-8 text-gray-900 text-center">
+                                        {problem.question}
+                                    </div>
+                                    
+                                    <div className="bg-gray-100 rounded-2xl p-4 mb-3">
+                                        <div className="text-center">
+                                            <label className="text-xs sm:text-sm text-gray-600 mb-1 block">Your Answer:</label>
+                                            <div className="text-3xl sm:text-4xl font-bold text-gray-900 min-h-[50px] border-b-4 border-blue-500 pb-2">
+                                                {multiplicationAnswer || '_'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <NumberKeyboard />
+                                </div>
+                            )}
+                            
+                            {/* Multiplication Facts */}
+                            {problem?.type === 'multiplication-facts' && (
+                                <div className="mb-4 sm:mb-6">
+                                    <div className="text-center mb-3">
+                                        <div className="text-base sm:text-lg text-gray-600 mb-3">
+                                            {problem.visual.groups} {problem.visual.groups === 1 ? 'group' : 'groups'} of {problem.visual.itemsPerGroup}
+                                        </div>
+                                        <div className="grid gap-1.5 items-center justify-center" style={{
+                                            gridTemplateColumns: `repeat(${Math.min(problem.visual.groups, 5)}, minmax(0, 1fr))`,
+                                            maxWidth: '100%'
+                                        }}>
+                                            {Array(problem.visual.groups).fill(0).map((_, groupIndex) => (
+                                                <div key={groupIndex} className="flex flex-wrap justify-center gap-0.5 p-1 bg-gray-100 rounded-lg">
+                                                    {Array(problem.visual.itemsPerGroup).fill(0).map((_, itemIndex) => (
+                                                        <span key={itemIndex} className="text-lg sm:text-xl">{problem.visual.emoji}</span>
+                                                    ))}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="text-3xl sm:text-4xl font-semibold text-gray-900 mt-4">{problem.question}</div>
+                                    </div>
+                                    
+                                    <div className="bg-gray-100 rounded-2xl p-4 mb-3">
+                                        <div className="text-center">
+                                            <label className="text-xs sm:text-sm text-gray-600 mb-1 block">Your Answer:</label>
+                                            <div className="text-3xl sm:text-4xl font-bold text-gray-900 min-h-[50px] border-b-4 border-blue-500 pb-2">
+                                                {multiplicationAnswer || '_'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <NumberKeyboard />
+                                </div>
+                            )}
+                            
+                            {/* Multiplication Challenge */}
+                            {problem?.type === 'multiplication-challenge' && (
+                                <div className="mb-4 sm:mb-6">
+                                    <div className="text-5xl sm:text-6xl font-semibold mb-6 sm:mb-8 text-gray-900 text-center">
+                                        {problem.question}
+                                    </div>
+                                    
+                                    <div className="bg-gray-100 rounded-2xl p-4 mb-3">
+                                        <div className="text-center">
+                                            <label className="text-xs sm:text-sm text-gray-600 mb-1 block">Your Answer:</label>
+                                            <div className="text-3xl sm:text-4xl font-bold text-gray-900 min-h-[50px] border-b-4 border-blue-500 pb-2">
+                                                {multiplicationAnswer || '_'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <NumberKeyboard />
+                                </div>
+                            )}
+                            
+                            {/* Multiplication Timed */}
+                            {problem?.type === 'multiplication-timed' && (
+                                <div className="mb-4 sm:mb-6">
+                                    <div className="text-4xl sm:text-5xl font-semibold mb-6 sm:mb-8 text-gray-900 text-center">
+                                        {problem.question}
+                                    </div>
+                                    
+                                    <div className="bg-gray-100 rounded-2xl p-4 mb-3">
+                                        <div className="text-center">
+                                            <label className="text-xs sm:text-sm text-gray-600 mb-1 block">Your Answer:</label>
+                                            <div className="text-3xl sm:text-4xl font-bold text-gray-900 min-h-[50px] border-b-4 border-blue-500 pb-2">
+                                                {multiplicationAnswer || '_'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <NumberKeyboard />
+                                </div>
+                            )}
+                            
+                            {/* Spelling */}
+                            {problem?.type === 'spelling' && (
+                                <div className="mb-4 sm:mb-6">
+                                    <div className="text-center mb-4">
+                                        <button
+                                            onClick={() => speakWord(problem.word)}
+                                            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-8 rounded-2xl text-2xl sm:text-3xl mb-3 transition-all shadow-lg"
+                                        >
+                                            🔊 Play
+                                        </button>
+                                        {problem.number && (
+                                            <div className="text-5xl sm:text-6xl font-bold text-gray-900">
+                                                {problem.number}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="bg-gray-100 rounded-2xl p-4 mb-3">
+                                        <div className="text-center">
+                                            <label className="text-xs sm:text-sm text-gray-600 mb-1 block">Your Answer:</label>
+                                            <div className="text-2xl sm:text-3xl font-bold text-gray-900 min-h-[40px] border-b-4 border-blue-500 pb-2">
+                                                {spellingAnswer || '_'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-white rounded-xl p-3">
+                                        {keyboard.map((row, i) => (
+                                            <div key={i} className="flex justify-center gap-1 mb-1.5">
+                                                {row.map((letter) => (
+                                                    <button
+                                                        key={letter}
+                                                        onClick={() => setSpellingAnswer(spellingAnswer + letter.toLowerCase())}
+                                                        disabled={answerLocked}
+                                                        className={`bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-2 px-2.5 sm:py-2.5 sm:px-3 rounded-lg text-sm sm:text-base transition-colors ${answerLocked ? 'opacity-50' : ''}`}
+                                                    >
+                                                        {letter}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ))}
+                                        <div className="flex justify-center gap-2 mt-2">
+                                            <button
+                                                onClick={() => setSpellingAnswer(spellingAnswer.slice(0, -1))}
+                                                disabled={answerLocked}
+                                                className={`bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors ${answerLocked ? 'opacity-50' : ''}`}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Answer buttons */}
+                            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 mt-4 sm:mt-6">
+                                {problem?.type === 'counting' && problem?.options?.map((option) => (
+                                    <button
+                                        key={option}
+                                        onClick={() => handleAnswer(option)}
+                                        disabled={answerLocked}
+                                        className={`bg-gray-100 hover:bg-gray-200 text-gray-900 text-xl sm:text-2xl font-semibold py-4 sm:py-5 rounded-xl transition-colors ${
+                                            answerLocked ? 'opacity-50 cursor-not-allowed' : ''
+                                        }`}
+                                    >
+                                        {option}
+                                    </button>
+                                ))}
+                                
+                                {problem?.type === 'spelling' && (
+                                    <button
+                                        onClick={() => handleAnswer(null)}
+                                        disabled={answerLocked || !spellingAnswer.trim()}
+                                        className={`col-span-2 bg-green-500 hover:bg-green-600 text-white text-lg sm:text-xl font-bold py-3 rounded-xl transition-colors ${
+                                            (answerLocked || !spellingAnswer.trim()) ? 'opacity-50 cursor-not-allowed' : ''
+                                        }`}
+                                    >
+                                        Check Answer
+                                    </button>
+                                )}
+                                
+                                {problem?.type !== 'counting' && problem?.type !== 'spelling' && (
+                                    <button
+                                        onClick={() => handleAnswer(null)}
+                                        disabled={answerLocked || !multiplicationAnswer.trim()}
+                                        className={`col-span-2 bg-green-500 hover:bg-green-600 text-white text-lg sm:text-xl font-bold py-3 rounded-xl transition-colors ${
+                                            (answerLocked || !multiplicationAnswer.trim()) ? 'opacity-50 cursor-not-allowed' : ''
+                                        }`}
+                                    >
+                                        Check Answer
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {/* Feedback */}
+                            {feedback && (
+                                <div className={`mt-6 text-center text-base sm:text-lg font-medium ${
+                                    feedback.includes('Correct') ? 'text-green-600' : feedback.includes('Try again') ? 'text-gray-600' : 'text-red-600'
+                                }`}>
+                                    {feedback.includes('Correct') && <span className="text-xl sm:text-2xl mr-2">✓</span>}
+                                    {feedback.includes('The correct answer') && <span className="text-xl sm:text-2xl mr-2">✗</span>}
+                                    {feedback}
+                                </div>
+                            )}
+                            
+                            {!timeLimit && (feedback || showCelebration) && (
+                                <button
+                                    onClick={handleNextQuestion}
+                                    className="w-full mt-6 bg-gray-900 text-white font-medium py-3 rounded-xl hover:bg-gray-800 transition-colors"
+                                >
+                                    Next →
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<MathLearningApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
